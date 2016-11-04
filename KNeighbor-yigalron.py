@@ -28,9 +28,9 @@ from statsmodels.robust.scale import mad
 
 # In[2]:
 
-n_neighbors = 5
-n_feature_kept = 500
 param_grid = {
+    'n_neighbors': [5, 10, 20, 30, 40, 50],
+    'weights': ['uniform'],
 }
 
 
@@ -46,13 +46,13 @@ plt.style.use('seaborn-notebook')
 GENE = 'TP53'
 
 
-# In[ ]:
+# In[5]:
 
 if not os.path.exists('data'):
     os.makedirs('data')
 
 
-# In[ ]:
+# In[6]:
 
 url_to_path = {
     # X matrix
@@ -68,34 +68,34 @@ for url, path in url_to_path.items():
         urllib.request.urlretrieve(url, path)
 
 
-# In[5]:
+# In[7]:
 
 get_ipython().run_cell_magic('time', '', "path = os.path.join('data', 'expression.tsv.bz2')\nX = pd.read_table(path, index_col=0)")
 
 
-# In[6]:
+# In[8]:
 
 get_ipython().run_cell_magic('time', '', "path = os.path.join('data', 'mutation-matrix.tsv.bz2')\nY = pd.read_table(path, index_col=0)")
 
 
-# In[7]:
+# In[9]:
 
 y = Y[GENE]
 
 
-# In[ ]:
+# In[10]:
 
 # The Series now holds TP53 Mutation Status for each Sample
 y.head(6)
 
 
-# In[ ]:
+# In[11]:
 
 # top samples
 X.head(6)
 
 
-# In[ ]:
+# In[12]:
 
 # Here are the percentage of tumors with NF1
 y.value_counts(True)
@@ -103,52 +103,37 @@ y.value_counts(True)
 
 # # Set aside 10% of the data for testing
 
-# In[8]:
+# In[13]:
 
 # Typically, this can only be done where the number of mutations is large enough
-# limit X and y for faster testing
-X_train, X_test, y_train, y_test = train_test_split(X[:3000], y[:3000], test_size=0.1, random_state=0)
+# limit X and y for faster testing; I ran out of memory without the limit
+X_train, X_test, y_train, y_test = train_test_split(X[:4000], y[:4000], test_size=0.1, random_state=0)
 'Size: {:,} features, {:,} training samples, {:,} testing samples'.format(len(X.columns), len(X_train), len(X_test))
 
 
 # ## Create a pipeline to do the prediction
 
-# In[9]:
-
-def fs_mad(x, y):
-    """    
-    Get the median absolute deviation (MAD) for each column of x
-    """
-    scores = mad(x) 
-    return scores, np.array([np.NaN]*len(scores))
-
-# select the top features with the highest MAD
-feature_select = SelectKBest(fs_mad, k=n_feature_kept)
-
-
 # In[14]:
 
-clf = neighbors.KNeighborsClassifier(n_neighbors,'uniform')
-# clf = neighbors.KNeighborsClassifier(n_neighbors,'distance')
+clf = neighbors.KNeighborsClassifier()
 
 # joblib is used to cross-validate in parallel by setting `n_jobs=-1` in GridSearchCV
 # Supress joblib warning. See https://github.com/scikit-learn/scikit-learn/issues/6370
 warnings.filterwarnings('ignore', message='Changing the shape of non-C contiguous array')
 clf_grid = grid_search.GridSearchCV(estimator=clf, param_grid=param_grid, n_jobs=-1, scoring='roc_auc')
 pipeline = make_pipeline(
-    feature_select,  # Feature selection
     StandardScaler(),  # Feature scaling
     clf_grid)
 
 
 # In[15]:
 
-get_ipython().run_cell_magic('time', '', '# Fit the model (the computationally intensive part)\npipeline.fit(X=X_train, y=y_train)\nbest_clf = clf_grid.best_estimator_\nfeature_mask = feature_select.get_support()  # Get a boolean array indicating the selected features')
+get_ipython().run_cell_magic('time', '', '# Fit the model (the computationally intensive part)\npipeline.fit(X=X_train, y=y_train)\nbest_clf = clf_grid.best_estimator_\n#feature_mask = feature_select.get_support()  # Get a boolean array indicating the selected features')
 
 
 # In[16]:
 
-get_ipython().run_cell_magic('time', '', "y_pred_train = pipeline.predict(X_train)\ny_pred_test = pipeline.predict(X_test)\n\ndef get_threshold_metrics(y_true, y_pred):\n    roc_columns = ['fpr', 'tpr', 'threshold']\n    roc_items = zip(roc_columns, roc_curve(y_true, y_pred))\n    roc_df = pd.DataFrame.from_items(roc_items)\n    auroc = roc_auc_score(y_true, y_pred)\n    return {'auroc': auroc, 'roc_df': roc_df}\n\nmetrics_train = get_threshold_metrics(y_train, y_pred_train)\nmetrics_test = get_threshold_metrics(y_test, y_pred_test)")
+get_ipython().run_cell_magic('time', '', "y_pred_train = pipeline.predict_proba(X_train)[:, 1]\ny_pred_test = pipeline.predict_proba(X_test)[:, 1]\n\ndef get_threshold_metrics(y_true, y_pred):\n    roc_columns = ['fpr', 'tpr', 'threshold']\n    roc_items = zip(roc_columns, roc_curve(y_true, y_pred))\n    roc_df = pd.DataFrame.from_items(roc_items)\n    auroc = roc_auc_score(y_true, y_pred)\n    return {'auroc': auroc, 'roc_df': roc_df}\n\nmetrics_train = get_threshold_metrics(y_train, y_pred_train)\nmetrics_test = get_threshold_metrics(y_test, y_pred_test)")
 
 
 # In[17]:
