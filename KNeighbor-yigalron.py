@@ -68,34 +68,34 @@ for url, path in url_to_path.items():
         urllib.request.urlretrieve(url, path)
 
 
-# In[7]:
+# In[5]:
 
 get_ipython().run_cell_magic('time', '', "path = os.path.join('data', 'expression.tsv.bz2')\nX = pd.read_table(path, index_col=0)")
 
 
-# In[8]:
+# In[6]:
 
 get_ipython().run_cell_magic('time', '', "path = os.path.join('data', 'mutation-matrix.tsv.bz2')\nY = pd.read_table(path, index_col=0)")
 
 
-# In[9]:
+# In[7]:
 
 y = Y[GENE]
 
 
-# In[10]:
+# In[8]:
 
 # The Series now holds TP53 Mutation Status for each Sample
 y.head(6)
 
 
-# In[11]:
+# In[9]:
 
 # top samples
 X.head(6)
 
 
-# In[12]:
+# In[10]:
 
 # Here are the percentage of tumors with NF1
 y.value_counts(True)
@@ -103,7 +103,7 @@ y.value_counts(True)
 
 # # Set aside 10% of the data for testing
 
-# In[13]:
+# In[11]:
 
 # Typically, this can only be done where the number of mutations is large enough
 # limit X and y for faster testing; I ran out of memory without the limit
@@ -113,7 +113,7 @@ X_train, X_test, y_train, y_test = train_test_split(X[:4000], y[:4000], test_siz
 
 # ## Create a pipeline to do the prediction
 
-# In[14]:
+# In[12]:
 
 clf = neighbors.KNeighborsClassifier()
 
@@ -126,17 +126,22 @@ pipeline = make_pipeline(
     clf_grid)
 
 
-# In[15]:
+# In[13]:
 
 get_ipython().run_cell_magic('time', '', '# Fit the model (the computationally intensive part)\npipeline.fit(X=X_train, y=y_train)\nbest_clf = clf_grid.best_estimator_\n#feature_mask = feature_select.get_support()  # Get a boolean array indicating the selected features')
 
 
 # In[16]:
 
-get_ipython().run_cell_magic('time', '', "y_pred_train = pipeline.predict_proba(X_train)[:, 1]\ny_pred_test = pipeline.predict_proba(X_test)[:, 1]\n\ndef get_threshold_metrics(y_true, y_pred):\n    roc_columns = ['fpr', 'tpr', 'threshold']\n    roc_items = zip(roc_columns, roc_curve(y_true, y_pred))\n    roc_df = pd.DataFrame.from_items(roc_items)\n    auroc = roc_auc_score(y_true, y_pred)\n    return {'auroc': auroc, 'roc_df': roc_df}\n\nmetrics_train = get_threshold_metrics(y_train, y_pred_train)\nmetrics_test = get_threshold_metrics(y_test, y_pred_test)")
+print (clf_grid.best_params_)
 
 
 # In[17]:
+
+get_ipython().run_cell_magic('time', '', "y_pred_train = pipeline.predict_proba(X_train)[:, 1]\ny_pred_test = pipeline.predict_proba(X_test)[:, 1]\n\ndef get_threshold_metrics(y_true, y_pred):\n    roc_columns = ['fpr', 'tpr', 'threshold']\n    roc_items = zip(roc_columns, roc_curve(y_true, y_pred))\n    roc_df = pd.DataFrame.from_items(roc_items)\n    auroc = roc_auc_score(y_true, y_pred)\n    return {'auroc': auroc, 'roc_df': roc_df}\n\nmetrics_train = get_threshold_metrics(y_train, y_pred_train)\nmetrics_test = get_threshold_metrics(y_test, y_pred_test)")
+
+
+# In[18]:
 
 # Plot ROC
 plt.figure()
@@ -150,9 +155,4 @@ plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
 plt.title('Predicting TP53 mutation from gene expression (ROC curves)')
 plt.legend(loc='lower right');
-
-
-# In[ ]:
-
-
 
