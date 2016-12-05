@@ -68,34 +68,34 @@ for url, path in url_to_path.items():
         urllib.request.urlretrieve(url, path)
 
 
-# In[5]:
+# In[6]:
 
 get_ipython().run_cell_magic('time', '', "path = os.path.join('data', 'expression.tsv.bz2')\nX = pd.read_table(path, index_col=0)")
 
 
-# In[6]:
+# In[7]:
 
 get_ipython().run_cell_magic('time', '', "path = os.path.join('data', 'mutation-matrix.tsv.bz2')\nY = pd.read_table(path, index_col=0)")
 
 
-# In[7]:
+# In[8]:
 
 y = Y[GENE]
 
 
-# In[8]:
+# In[9]:
 
 # The Series now holds TP53 Mutation Status for each Sample
 y.head(6)
 
 
-# In[9]:
+# In[10]:
 
 # top samples
 X.head(6)
 
 
-# In[10]:
+# In[11]:
 
 # Here are the percentage of tumors with NF1
 y.value_counts(True)
@@ -103,17 +103,18 @@ y.value_counts(True)
 
 # # Set aside 10% of the data for testing
 
-# In[11]:
+# In[12]:
 
 # Typically, this can only be done where the number of mutations is large enough
 # limit X and y for faster testing; I ran out of memory without the limit
-X_train, X_test, y_train, y_test = train_test_split(X[:4000], y[:4000], test_size=0.1, random_state=0)
+# X_train, X_test, y_train, y_test = train_test_split(X[:4000], y[:4000], test_size=0.1, random_state=0)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
 'Size: {:,} features, {:,} training samples, {:,} testing samples'.format(len(X.columns), len(X_train), len(X_test))
 
 
 # ## Create a pipeline to do the prediction
 
-# In[12]:
+# In[13]:
 
 clf = neighbors.KNeighborsClassifier()
 
@@ -126,22 +127,48 @@ pipeline = make_pipeline(
     clf_grid)
 
 
-# In[13]:
+# In[14]:
 
 get_ipython().run_cell_magic('time', '', '# Fit the model (the computationally intensive part)\npipeline.fit(X=X_train, y=y_train)\nbest_clf = clf_grid.best_estimator_\n#feature_mask = feature_select.get_support()  # Get a boolean array indicating the selected features')
 
 
-# In[16]:
+# In[15]:
 
 print (clf_grid.best_params_)
 
 
-# In[17]:
+# In[22]:
+
+def grid_scores_to_df(grid_scores):
+    """
+    Convert a sklearn.grid_search.GridSearchCV.grid_scores_ attribute to 
+    a tidy pandas DataFrame where each row is a hyperparameter-fold combinatination.
+    """
+    rows = list()
+    for grid_score in grid_scores:
+        for fold, score in enumerate(grid_score.cv_validation_scores):
+            row = grid_score.parameters.copy()
+            row['fold'] = fold
+            row['score'] = score
+            rows.append(row)
+    df = pd.DataFrame(rows)
+    return df
+
+
+# In[24]:
+
+cv_score_df = grid_scores_to_df(clf_grid.grid_scores_)
+facet_grid = sns.factorplot(x='n_neighbors', y='score', col='n_neighbors',
+    data=cv_score_df, kind='violin', size=4, aspect=1)
+facet_grid.set_ylabels('AUROC');
+
+
+# In[16]:
 
 get_ipython().run_cell_magic('time', '', "y_pred_train = pipeline.predict_proba(X_train)[:, 1]\ny_pred_test = pipeline.predict_proba(X_test)[:, 1]\n\ndef get_threshold_metrics(y_true, y_pred):\n    roc_columns = ['fpr', 'tpr', 'threshold']\n    roc_items = zip(roc_columns, roc_curve(y_true, y_pred))\n    roc_df = pd.DataFrame.from_items(roc_items)\n    auroc = roc_auc_score(y_true, y_pred)\n    return {'auroc': auroc, 'roc_df': roc_df}\n\nmetrics_train = get_threshold_metrics(y_train, y_pred_train)\nmetrics_test = get_threshold_metrics(y_test, y_pred_test)")
 
 
-# In[18]:
+# In[17]:
 
 # Plot ROC
 plt.figure()
@@ -155,4 +182,9 @@ plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
 plt.title('Predicting TP53 mutation from gene expression (ROC curves)')
 plt.legend(loc='lower right');
+
+
+# In[ ]:
+
+
 
